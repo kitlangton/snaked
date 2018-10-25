@@ -1,6 +1,7 @@
 module Main where
 
 import           Snaked.UI                      ( playGame )
+import           Snaked.GameState               ( GameState )
 
-main :: IO ()
+main :: IO GameState
 main = playGame
