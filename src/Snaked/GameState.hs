@@ -29,7 +29,7 @@ type SnakeT a = State GameState a
 
 $(makeLenses ''GameState)
 
-defaultGameState = GameState
+empty = GameState
   (M.fromList
     [ (SnakeId 0, Snake.fromList 0 [(2, 2), (1, 2)])
     , (SnakeId 1, Snake.fromList 1 $ reverse [(4, 4), (3, 4), (2, 4), (2, 5)])
@@ -40,21 +40,21 @@ defaultGameState = GameState
 allSnakesCoords :: Traversal' GameState Coord
 allSnakesCoords = snakes . traverse . Snake.pieces . traverse
 
-step :: SnakeT ()
-step = advanceSnakes >> removeColliding
+step :: GameState -> GameState
+step = advanceSnakes . removeColliding
 
-intendTurn :: SnakeId -> Direction -> SnakeT ()
-intendTurn snakeId newDirection = snakes . ix snakeId %= Snake.intendTurn newDirection
+intendTurn :: SnakeId -> Direction -> GameState -> GameState
+intendTurn snakeId newDirection gs =
+  gs & snakes . ix snakeId %~ Snake.intendTurn newDirection
 
 -- Advances snakes in their current directions
-advanceSnakes :: SnakeT ()
-advanceSnakes = do
-  size <- use size
-  snakes . traverse %= (Snake.advance size . Snake.finalizeTurn)
+advanceSnakes :: GameState -> GameState
+advanceSnakes gs =
+  gs & snakes . traverse %~ (Snake.advance (gs ^. size) . Snake.finalizeTurn)
 
 -- Removes colliding snakes
-removeColliding :: SnakeT ()
-removeColliding = snakes %= removeColliding'
+removeColliding :: GameState -> GameState
+removeColliding = snakes %~ removeColliding'
 
 removeColliding' :: SnakeMap -> SnakeMap
 removeColliding' snakeMap =

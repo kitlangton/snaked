@@ -20,20 +20,20 @@ import           Brick.Widgets.Border.Style
 import           Brick.Widgets.Center
 import qualified Graphics.Vty                  as V
 
-import           Snaked.Snake (SnakeId(..))
+import           Snaked.Snake                   ( SnakeId(..) )
 import           Snaked.GameState
 import           Snaked.Grid
 
 body :: Widget ()
 body = str "██"
 
-empty :: Widget ()
-empty = str "  "
+open :: Widget ()
+open = str "  "
 
 data Piece = Body | Fruit | Empty
 
 renderPiece Body  = body
-renderPiece Empty = empty
+renderPiece Empty = open
 
 gameStateToGrid :: GameState -> [[Piece]]
 gameStateToGrid ss@GameState {..} =
@@ -83,10 +83,10 @@ handleEvent ui (VtyEvent (V.EvKey V.KDown [])) = handleTurn N ui
 handleEvent ss _ = continue ss
 
 handleTick :: GameState -> EventM Name (Next GameState)
-handleTick ss = continue $ execState step ss
+handleTick ss = continue $ step ss
 
 handleTurn :: Direction -> GameState -> EventM Name (Next GameState)
-handleTurn dir ss = continue $ execState (intendTurn (SnakeId 1) dir) ss
+handleTurn dir ss = continue $ (intendTurn (SnakeId 1) dir) ss
 
 playGame :: IO GameState
 playGame = do
@@ -94,4 +94,4 @@ playGame = do
   forkIO $ forever $ do
     writeBChan chan Tick
     threadDelay 100000
-  customMain (V.mkVty V.defaultConfig) (Just chan) app defaultGameState
+  customMain (V.mkVty V.defaultConfig) (Just chan) app empty

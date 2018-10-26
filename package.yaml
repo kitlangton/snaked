@@ -26,8 +26,12 @@ dependencies:
 - vector
 - brick
 - linear
+- aeson
+- websockets
+- text
 - mtl
 - vty
+- stm
 
 library:
   source-dirs: src
