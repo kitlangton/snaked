@@ -1,5 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -22,11 +22,14 @@ import qualified Snaked.GameState              as GameState
 import           Snaked.Snake
 
 import           Control.Monad.Reader
-import           Control.Concurrent.STM
-import           Control.Concurrent.STM.TVar
 import           Control.Concurrent             ( threadDelay
                                                 , forkIO
                                                 )
+import           Control.Lens.TH
+import           Control.Monad.State     hiding ( atomically )
+import           Control.Lens
+import           Data.IORef
+import           Data.Tuple
 
 data User = User {
   id :: Int,
@@ -34,65 +37,60 @@ data User = User {
 }
 
 data Env = Env
-  { envUsers :: TVar [User]
-  , envGame :: TVar GameState
+  { _envUsers :: [User]
+  , _envGame :: GameState
   }
 
-type ServerT = ReaderT Env IO
+$(makeLenses ''Env)
 
-modify :: ([User] -> [User]) -> ServerT ()
-modify f = do
-  env <- ask
-  liftIO $ atomically $ modifyTVar' (envUsers env) f
+type Server = ReaderT (IORef Env) IO
 
-addUser :: WS.Connection -> ServerT ()
+addUser' :: WS.Connection -> State Env User
+addUser' conn = do
+  users <- use envUsers
+  let userId = length users
+      user   = User userId conn
+  envGame %= GameState.addSnake (SnakeId userId)
+  envUsers %= (user :)
+  return user
+
+addUser :: WS.Connection -> Server ()
 addUser conn = do
-  Env usersVar gameVar <- ask
-  user                 <- liftIO $ atomically $ do
-    users <- readTVar usersVar
-    let userId = (length users)
-        user   = User userId conn
-    modifyTVar' usersVar (user :)
-    modifyTVar' gameVar  (GameState.addSnake $ SnakeId userId)
-    return user
+  user <- atomically (addUser' conn)
   forever (control user)
 
-control :: User -> ServerT ()
+atomically :: State Env a -> Server a
+atomically f = do
+  envRef <- ask
+  liftIO $ atomicModifyIORef' envRef (swap . runState f)
+
+control :: User -> Server ()
 control (User uid conn) = do
   Just (direction :: Direction) <- liftIO $ decode <$> WS.receiveData conn
-  liftIO $ putStrLn $ "Received: " ++ show direction
-  gameVar <- asks envGame
-  liftIO $ atomically $ modifyTVar'
-    gameVar
-    (GameState.intendTurn (SnakeId uid) direction)
+  liftIO $ putStrLn $ printf "User %d - %s" uid (show direction)
+  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) direction)
 
 sendGameState :: GameState -> User -> IO ()
 sendGameState gameState (User _ conn) = WS.sendTextData conn (encode gameState)
 
-gameloop :: ServerT ()
+gameloop :: Server ()
 gameloop = do
-  Env usersVar gameVar <- ask
+  (gameState, users, foodCoord) <- atomically $ do
+    oldGame <- use envGame
+    users   <- use envUsers
+    envGame %= GameState.step
+    return (oldGame, users, head $ GameState._foodLocations oldGame)
 
-  (gameState, users)   <- liftIO $ atomically $ do
-    gameState <- readTVar gameVar
-    writeTVar gameVar $ GameState.step gameState
-    users <- readTVar usersVar
-    return (gameState, users)
+  liftIO $ mapM_ (sendGameState gameState) users
 
-  liftIO $ do
-    mapM_ (sendGameState gameState) users
-    threadDelay 100000
-    putStrLn "tick"
-
+  liftIO $ threadDelay 100000
   gameloop
 
 server :: IO ()
 server = do
-  envGame  <- newTVarIO GameState.empty
-  envUsers <- newTVarIO []
-  let env = Env { .. }
-  forkIO $ runReaderT gameloop env
-  WS.runServer "127.0.0.1" 9160 $ handleConnection env
+  envVar <- newIORef (Env [] GameState.empty)
+  forkIO $ runReaderT gameloop envVar
+  WS.runServer "127.0.0.1" 9160 $ handleConnection envVar
 
 handleConnection env pending = do
   conn <- WS.acceptRequest pending
@@ -102,21 +100,6 @@ handleConnection env pending = do
 
 --------------------------------------------------------------------------------
 clientApp :: WS.ClientApp ()
-clientApp conn = do
-  putStrLn "Connected!"
-
-  void $ playGame conn
-  -- -- Fork a thread that writes WS data to stdout
-  -- _ <- forkIO $ forever $ do
-  --   msg <- WS.receiveData conn
-  --   liftIO $ T.putStrLn msg
-  --
-  -- -- Read from stdin and write to WS
-  -- let loop = do
-  --       line <- T.getLine
-  --       unless (T.null line) $ WS.sendTextData conn line >> loop
-  --
-  -- loop
-  -- WS.sendClose conn ("Bye!" :: Text)
+clientApp conn = void $ playGame conn
 
 client = WS.runClient "127.0.0.1" 9160 "/" clientApp

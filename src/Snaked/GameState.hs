@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE StrictData #-}
 
 module Snaked.GameState where
 
@@ -20,7 +20,8 @@ type SnakeMap = M.Map SnakeId Snake
 
 data GameState = GameState {
   _snakes :: SnakeMap,
-  _size :: Size
+  _size :: Size,
+  _foodLocations :: [Coord]
 } deriving Show
 
 type SnakeT a = State GameState a
@@ -31,7 +32,10 @@ $(deriveJSON defaultOptions ''Direction)
 $(deriveJSON defaultOptions ''Snake)
 $(deriveJSON defaultOptions ''GameState)
 
-empty = GameState (M.fromList []) (20, 20)
+empty = GameState (M.fromList []) (20, 20) (take 30 $ randomCoords (20, 20))
+
+foodCoord :: GameState -> Coord
+foodCoord = views foodLocations head
 
 addSnake :: SnakeId -> GameState -> GameState
 addSnake sid =
@@ -41,11 +45,25 @@ allSnakesCoords :: Traversal' GameState Coord
 allSnakesCoords = snakes . traverse . Snake.pieces . traverse
 
 step :: GameState -> GameState
-step = advanceSnakes . removeColliding
+step = advanceSnakes . checkFood . removeColliding
 
 intendTurn :: SnakeId -> Direction -> GameState -> GameState
 intendTurn snakeId newDirection gs =
   gs & snakes . ix snakeId %~ Snake.intendTurn newDirection
+
+checkFood :: GameState -> GameState
+checkFood gs | null eatingSnakes = gs
+             | otherwise         = gs' & foodLocations %~ tail
+ where
+  food = foodCoord gs
+  -- SO COOL
+  -- With lenses you can return both the updated structure as well as the
+  -- modified value
+  (eatingSnakes, gs') =
+    gs
+      &   snakes
+      .   partsOf (traverse . filtered (isEating food))
+      <%~ fmap Snake.eat
 
 -- Advances snakes in their current directions
 advanceSnakes :: GameState -> GameState
@@ -55,7 +73,7 @@ advanceSnakes gs =
 -- Removes colliding snakes
 removeColliding :: GameState -> GameState
 removeColliding = snakes %~ removeColliding'
-
-removeColliding' :: SnakeMap -> SnakeMap
-removeColliding' snakeMap =
-  M.filter (\s -> not $ any (Snake.colliding s) snakeMap) snakeMap
+ where
+  removeColliding' :: SnakeMap -> SnakeMap
+  removeColliding' snakeMap =
+    M.filter (\s -> not $ any (Snake.colliding s) snakeMap) snakeMap

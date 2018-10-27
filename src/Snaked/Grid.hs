@@ -1,6 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Snaked.Grid where
 
 import           Linear.V2
@@ -11,11 +9,29 @@ import qualified Network.WebSockets            as WS
 import           Data.Text                      ( Text )
 
 import           Data.Aeson.TH
+import           System.Random
 
 data Direction = N | E | S | W deriving (Show, Enum, Eq, Ord)
 
 type Coord = V2 Int
 type Size = (Int, Int)
+
+instance Random a => Random (V2 a) where
+  randomR (V2 l1 l2, V2 h1 h2) g =
+    let
+      (a,g') = randomR (l1,h1) g
+      (b,g'') = randomR (l2,h2) g'
+    in
+     (V2 a b, g'')
+  random g =
+    let
+      (a,g') = random g
+      (b,g'') = random g'
+    in
+     (V2 a b, g'')
+
+randomCoords :: Size -> [Coord]
+randomCoords (a, b) = randomRs (V2 0 0, V2 a b) $ mkStdGen 1
 
 mkCoord :: Int -> Int -> Coord
 mkCoord = V2

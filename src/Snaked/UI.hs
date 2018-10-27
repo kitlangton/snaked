@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Snaked.UI where
 
@@ -29,21 +30,28 @@ import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 
 body :: Widget ()
-body = str "██"
+body = withAttr "snake" $ str "██"
 
 open :: Widget ()
 open = str "  "
+
+fruit :: Widget ()
+fruit = withAttr "fruit" $ str "██"
 
 data Piece = Body | Fruit | Empty
 
 renderPiece Body  = body
 renderPiece Empty = open
+renderPiece Fruit = fruit
 
 gameStateToGrid :: GameState -> [[Piece]]
 gameStateToGrid ss@GameState {..} =
   let bodyParts = S.fromList $ ss ^.. allSnakesCoords
       (x', y')  = _size
-  in  [ [ if S.member (mkCoord x y) bodyParts then Body else Empty
+  in  [ [ case () of
+            _ | S.member (mkCoord x y) bodyParts -> Body
+            _ | mkCoord x y == foodCoord ss -> Fruit
+            _                               -> Empty
         | x <- [0 .. x' - 1]
         ]
       | y <- [0 .. y' - 1]
@@ -74,7 +82,7 @@ app serverConn = App
   }
 
 theMap :: AttrMap
-theMap = attrMap V.defAttr []
+theMap = attrMap V.defAttr [("fruit", fg V.red), ("snake", fg V.blue)]
 
 handleEvent
   :: WS.Connection

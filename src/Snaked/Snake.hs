@@ -29,6 +29,7 @@ newtype SnakeId = SnakeId Int
 data Snake = Snake {
   _snakeId :: SnakeId,
   _pieces :: [Coord],
+  _hasEaten :: Bool,
   _nextDirection :: Maybe Direction,
   _direction :: Direction
 } deriving (Show, Eq)
@@ -41,12 +42,26 @@ fromList snakeId (fmap (uncurry mkCoord) -> coords)
   | not $ isConnected coords = error
     "Each coord must be 1 distance away from the last"
   | length coords /= length (nub coords) = error "Each coord must be unique"
-  | otherwise = Snake (snakeId) coords Nothing $ deriveDirection coords
+  | otherwise = Snake snakeId coords False Nothing $ deriveDirection coords
+
+eat = hasEaten .~ True
 
 advance :: Size -> Snake -> Snake
-advance size snake@Snake {..} =
-  let newHead = wrapCoord size $ move _direction (head _pieces)
-  in  snake { _pieces = newHead : init _pieces }
+advance size snake | snake ^. hasEaten = grow size snake & hasEaten .~ False
+                   | otherwise         = advance' size snake
+
+advance' :: Size -> Snake -> Snake
+advance' size = do
+  newHead <- nextHead size
+  pieces %~ cons newHead . init
+
+grow :: Size -> Snake -> Snake
+grow size = do
+  newHead <- nextHead size
+  pieces %~ (newHead :)
+
+nextHead :: Size -> Snake -> Coord
+nextHead size Snake {..} = wrapCoord size $ move _direction (head _pieces)
 
 snakeHead :: Snake -> Coord
 snakeHead = views pieces head
@@ -74,6 +89,9 @@ validTurn next current =
 
 snakeTail :: Snake -> [Coord]
 snakeTail = views pieces tail
+
+isEating :: Coord -> Snake -> Bool
+isEating foodCoord s = snakeHead s == foodCoord
 
 colliding :: Snake -> Snake -> Bool
 colliding s1 s2 | (s1 ^. snakeId) == (s2 ^. snakeId) = selfColliding s1
