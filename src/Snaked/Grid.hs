@@ -1,10 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Snaked.Grid where
 
 import           Linear.V2
 import           Data.Bifunctor
 import           Control.Arrow
 import           Control.Lens
+import qualified Network.WebSockets            as WS
+import           Data.Text                      ( Text )
+
+import           Data.Aeson.TH
 
 data Direction = N | E | S | W deriving (Show, Enum, Eq, Ord)
 

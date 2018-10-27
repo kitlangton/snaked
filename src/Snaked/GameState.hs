@@ -4,19 +4,17 @@
 
 module Snaked.GameState where
 
-import           Snaked.Grid                    ( Size
-                                                , Coord
-                                                , Direction(..)
-                                                )
+import           Snaked.Grid
+
 import           Control.Lens.TH
 import           Control.Lens
 import           Control.Monad.State
 import qualified Data.Map.Strict               as M
 
-import           Snaked.Snake                   ( Snake
-                                                , SnakeId(..)
-                                                )
+import           Snaked.Snake
 import qualified Snaked.Snake                  as Snake
+import           Data.Aeson.TH
+import           Linear.V2
 
 type SnakeMap = M.Map SnakeId Snake
 
@@ -28,10 +26,14 @@ data GameState = GameState {
 type SnakeT a = State GameState a
 
 $(makeLenses ''GameState)
+$(deriveJSON defaultOptions ''V2)
+$(deriveJSON defaultOptions ''Direction)
+$(deriveJSON defaultOptions ''Snake)
+$(deriveJSON defaultOptions ''GameState)
 
 empty = GameState
   (M.fromList
-    [ (SnakeId 0, Snake.fromList 0 [(2, 2), (1, 2)])
+    [ (SnakeId 0, Snake.fromList 0 [(8, 8), (8, 7), (8, 6), (7, 6)])
     , (SnakeId 1, Snake.fromList 1 $ reverse [(4, 4), (3, 4), (2, 4), (2, 5)])
     ]
   )

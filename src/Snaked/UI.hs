@@ -13,16 +13,20 @@ import           Control.Monad.State
 import qualified Data.Set                      as S
 import           Linear.V2
 
+import           Data.Aeson
 import           Brick.BChan
 import           Brick                   hiding ( Direction )
 import           Brick.Widgets.Border
 import           Brick.Widgets.Border.Style
 import           Brick.Widgets.Center
 import qualified Graphics.Vty                  as V
+import qualified Network.WebSockets            as WS
 
 import           Snaked.Snake                   ( SnakeId(..) )
 import           Snaked.GameState
 import           Snaked.Grid
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
 
 body :: Widget ()
 body = str "██"
@@ -58,14 +62,13 @@ renderGameState ss =
 -- main :: IO ()
 -- main = simpleMain $ renderGameState defaultGameState
 
-data Tick = Tick
 type Name = ()
 
-app :: App GameState Tick ()
-app = App
+app :: WS.Connection -> App GameState GameState ()
+app serverConn = App
   { appDraw         = (: []) . renderGameState
   , appChooseCursor = neverShowCursor
-  , appHandleEvent  = handleEvent
+  , appHandleEvent  = handleEvent serverConn
   , appStartEvent   = return
   , appAttrMap      = const theMap
   }
@@ -73,25 +76,34 @@ app = App
 theMap :: AttrMap
 theMap = attrMap V.defAttr []
 
-handleEvent :: GameState -> BrickEvent Name Tick -> EventM Name (Next GameState)
-handleEvent ss (AppEvent Tick) = handleTick ss
-handleEvent ss (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ss
-handleEvent ui (VtyEvent (V.EvKey V.KUp [])) = handleTurn S ui
-handleEvent ui (VtyEvent (V.EvKey V.KLeft [])) = handleTurn W ui
-handleEvent ui (VtyEvent (V.EvKey V.KRight [])) = handleTurn E ui
-handleEvent ui (VtyEvent (V.EvKey V.KDown [])) = handleTurn N ui
-handleEvent ss _ = continue ss
+handleEvent
+  :: WS.Connection
+  -> GameState
+  -> BrickEvent Name GameState
+  -> EventM Name (Next GameState)
+handleEvent _ ss (AppEvent newGameState) = handleTick newGameState
+handleEvent serverConn ss (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ss
+handleEvent serverConn ui (VtyEvent (V.EvKey V.KUp [])) = do
+  liftIO $ WS.sendTextData serverConn (encode S)
+  continue ui
+handleEvent serverConn ui (VtyEvent (V.EvKey V.KLeft [])) = do
+  liftIO $ WS.sendTextData serverConn (encode W)
+  continue ui
+handleEvent serverConn ui (VtyEvent (V.EvKey V.KRight [])) = do
+  liftIO $ WS.sendTextData serverConn (encode E)
+  continue ui
+handleEvent serverConn ui (VtyEvent (V.EvKey V.KDown [])) = do
+  liftIO $ WS.sendTextData serverConn (encode N)
+  continue ui
+handleEvent serverConn ss _ = continue ss
 
 handleTick :: GameState -> EventM Name (Next GameState)
 handleTick ss = continue $ step ss
 
-handleTurn :: Direction -> GameState -> EventM Name (Next GameState)
-handleTurn dir ss = continue $ (intendTurn (SnakeId 1) dir) ss
-
-playGame :: IO GameState
-playGame = do
+playGame :: WS.Connection -> IO GameState
+playGame serverConn = do
   chan <- newBChan 10
   forkIO $ forever $ do
-    writeBChan chan Tick
-    threadDelay 100000
-  customMain (V.mkVty V.defaultConfig) (Just chan) app empty
+    Just game' <- decode <$> WS.receiveData serverConn
+    writeBChan chan game'
+  customMain (V.mkVty V.defaultConfig) (Just chan) (app serverConn) empty

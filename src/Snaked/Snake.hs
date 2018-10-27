@@ -3,18 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Snaked.Snake
-  ( Snake(..)
-  , SnakeId(..)
-  , advance
-  , colliding
-  , fromList
-  , pieces
-  , direction
-  , intendTurn
-  , finalizeTurn
-  )
-where
+module Snaked.Snake where
 
 import           Data.List                      ( nub )
 import           Data.Maybe
@@ -22,6 +11,7 @@ import           Control.Lens.TH
 import           Control.Lens
 import           Control.Applicative
 import           Data.Traversable
+import           Data.Aeson
 
 import           Snaked.Grid                    ( Direction(..)
                                                 , Coord(..)
@@ -34,7 +24,7 @@ import           Snaked.Grid                    ( Direction(..)
                                                 )
 
 newtype SnakeId = SnakeId Int
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, FromJSON, ToJSON, ToJSONKey, FromJSONKey)
 
 data Snake = Snake {
   _snakeId :: SnakeId,
