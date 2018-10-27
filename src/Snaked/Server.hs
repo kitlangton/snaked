@@ -47,11 +47,13 @@ modify f = do
 
 addUser :: WS.Connection -> ServerT ()
 addUser conn = do
-  users' <- asks envUsers
-  user   <- liftIO $ atomically $ do
-    users <- readTVar users'
-    let user = User (length users) conn
-    modifyTVar' users' (user :)
+  Env usersVar gameVar <- ask
+  user                 <- liftIO $ atomically $ do
+    users <- readTVar usersVar
+    let userId = (length users)
+        user   = User userId conn
+    modifyTVar' usersVar (user :)
+    modifyTVar' gameVar  (GameState.addSnake $ SnakeId userId)
     return user
   forever (control user)
 

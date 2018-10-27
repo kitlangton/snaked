@@ -31,13 +31,11 @@ $(deriveJSON defaultOptions ''Direction)
 $(deriveJSON defaultOptions ''Snake)
 $(deriveJSON defaultOptions ''GameState)
 
-empty = GameState
-  (M.fromList
-    [ (SnakeId 0, Snake.fromList 0 [(8, 8), (8, 7), (8, 6), (7, 6)])
-    , (SnakeId 1, Snake.fromList 1 $ reverse [(4, 4), (3, 4), (2, 4), (2, 5)])
-    ]
-  )
-  (20, 20)
+empty = GameState (M.fromList []) (20, 20)
+
+addSnake :: SnakeId -> GameState -> GameState
+addSnake sid =
+  snakes %~ M.insert sid (Snake.fromList sid [(5, 5), (5, 6), (5, 7)])
 
 allSnakesCoords :: Traversal' GameState Coord
 allSnakesCoords = snakes . traverse . Snake.pieces . traverse

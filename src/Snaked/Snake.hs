@@ -24,7 +24,7 @@ import           Snaked.Grid                    ( Direction(..)
                                                 )
 
 newtype SnakeId = SnakeId Int
-  deriving (Show, Eq, Ord, FromJSON, ToJSON, ToJSONKey, FromJSONKey)
+  deriving (Show, Eq, Ord, Num, FromJSON, ToJSON, ToJSONKey, FromJSONKey)
 
 data Snake = Snake {
   _snakeId :: SnakeId,
@@ -35,13 +35,13 @@ data Snake = Snake {
 
 $(makeLenses ''Snake)
 
-fromList :: Int -> [(Int, Int)] -> Snake
+fromList :: SnakeId -> [(Int, Int)] -> Snake
 fromList snakeId (fmap (uncurry mkCoord) -> coords)
   | length coords < 2 = error "Must call fromList with at least 2 coordinates"
   | not $ isConnected coords = error
     "Each coord must be 1 distance away from the last"
   | length coords /= length (nub coords) = error "Each coord must be unique"
-  | otherwise = Snake (SnakeId snakeId) coords Nothing $ deriveDirection coords
+  | otherwise = Snake (snakeId) coords Nothing $ deriveDirection coords
 
 advance :: Size -> Snake -> Snake
 advance size snake@Snake {..} =
