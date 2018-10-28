@@ -7,26 +7,18 @@
 module Snaked.Server where
 
 import qualified Network.WebSockets            as WS
-
 import           Snaked.UI                      ( playGame )
 import           Snaked.GameState               ( GameState )
-import           Snaked.Grid                    ( Direction(..) )
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
-import qualified Data.Text.IO                  as T
-
 import           Text.Printf
-
 import           Data.Aeson
 import qualified Snaked.GameState              as GameState
 import           Snaked.Snake
-
 import           Control.Monad.Reader
 import           Control.Concurrent             ( threadDelay
                                                 , forkIO
                                                 )
 import           Control.Lens.TH
-import           Control.Monad.State     hiding ( atomically )
+import           Control.Monad.State
 import           Control.Lens
 import           Data.IORef
 import           Data.Tuple
@@ -66,20 +58,20 @@ atomically f = do
 
 control :: User -> Server ()
 control (User uid conn) = do
-  Just (direction :: Direction) <- liftIO $ decode <$> WS.receiveData conn
-  liftIO $ putStrLn $ printf "User %d - %s" uid (show direction)
-  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) direction)
+  Just dir <- liftIO $ decode <$> WS.receiveData conn
+  liftIO $ putStrLn $ printf "User %d - %s" uid (show dir)
+  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) dir)
 
 sendGameState :: GameState -> User -> IO ()
 sendGameState gameState (User _ conn) = WS.sendTextData conn (encode gameState)
 
 gameloop :: Server ()
 gameloop = do
-  (gameState, users, foodCoord) <- atomically $ do
+  (gameState, users) <- atomically $ do
     oldGame <- use envGame
     users   <- use envUsers
     envGame %= GameState.step
-    return (oldGame, users, head $ GameState._foodLocations oldGame)
+    return (oldGame, users)
 
   liftIO $ mapM_ (sendGameState gameState) users
 
@@ -89,17 +81,18 @@ gameloop = do
 server :: IO ()
 server = do
   envVar <- newIORef (Env [] GameState.empty)
-  forkIO $ runReaderT gameloop envVar
+  _      <- forkIO $ runReaderT gameloop envVar
   WS.runServer "127.0.0.1" 9160 $ handleConnection envVar
 
+handleConnection :: IORef Env -> WS.PendingConnection -> IO ()
 handleConnection env pending = do
   conn <- WS.acceptRequest pending
   runReaderT (addUser conn) env
 
 -- CLIENT
 
---------------------------------------------------------------------------------
 clientApp :: WS.ClientApp ()
 clientApp conn = void $ playGame conn
 
+client :: IO ()
 client = WS.runClient "127.0.0.1" 9160 "/" clientApp

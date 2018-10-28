@@ -39,7 +39,10 @@ foodCoord = views foodLocations head
 
 addSnake :: SnakeId -> GameState -> GameState
 addSnake sid =
-  snakes %~ M.insert sid (Snake.fromList sid [(5, 5), (5, 6), (5, 7)])
+  snakes %~ M.insert sid (Snake.fromList sid [(10, 11), (10, 10), (10, 9)])
+
+removeSnake :: SnakeId -> GameState -> GameState
+removeSnake sid = snakes %~ M.delete sid
 
 allSnakesCoords :: Traversal' GameState Coord
 allSnakesCoords = snakes . traverse . Snake.pieces . traverse

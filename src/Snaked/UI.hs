@@ -1,19 +1,14 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Snaked.UI where
 
-import           Control.Concurrent             ( threadDelay
-                                                , forkIO
-                                                )
-import           Control.Lens            hiding ( Empty
-                                                , center
-                                                )
+import           Control.Concurrent             ( forkIO )
+import           Control.Lens            hiding ( Empty )
 import           Control.Monad.State
 import qualified Data.Set                      as S
-import           Linear.V2
-
 import           Data.Aeson
 import           Brick.BChan
 import           Brick                   hiding ( Direction )
@@ -22,12 +17,8 @@ import           Brick.Widgets.Border.Style
 import           Brick.Widgets.Center
 import qualified Graphics.Vty                  as V
 import qualified Network.WebSockets            as WS
-
-import           Snaked.Snake                   ( SnakeId(..) )
 import           Snaked.GameState
 import           Snaked.Grid
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
 
 body :: Widget ()
 body = withAttr "snake" $ str "██"
@@ -40,6 +31,7 @@ fruit = withAttr "fruit" $ str "██"
 
 data Piece = Body | Fruit | Empty
 
+renderPiece :: Piece -> Widget ()
 renderPiece Body  = body
 renderPiece Empty = open
 renderPiece Fruit = fruit
@@ -84,26 +76,24 @@ app serverConn = App
 theMap :: AttrMap
 theMap = attrMap V.defAttr [("fruit", fg V.red), ("snake", fg V.blue)]
 
+keyToDir :: V.Key -> Maybe Direction
+keyToDir V.KUp    = Just S
+keyToDir V.KLeft  = Just W
+keyToDir V.KRight = Just E
+keyToDir V.KDown  = Just N
+keyToDir _        = Nothing
+
 handleEvent
   :: WS.Connection
   -> GameState
   -> BrickEvent Name GameState
   -> EventM Name (Next GameState)
-handleEvent _ ss (AppEvent newGameState) = handleTick newGameState
-handleEvent serverConn ss (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ss
-handleEvent serverConn ui (VtyEvent (V.EvKey V.KUp [])) = do
-  liftIO $ WS.sendTextData serverConn (encode S)
+handleEvent _ _ (AppEvent newGameState) = handleTick newGameState
+handleEvent _ ss (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ss
+handleEvent serverConn ui (VtyEvent (V.EvKey (keyToDir -> Just key) [])) = do
+  liftIO $ WS.sendTextData serverConn (encode key)
   continue ui
-handleEvent serverConn ui (VtyEvent (V.EvKey V.KLeft [])) = do
-  liftIO $ WS.sendTextData serverConn (encode W)
-  continue ui
-handleEvent serverConn ui (VtyEvent (V.EvKey V.KRight [])) = do
-  liftIO $ WS.sendTextData serverConn (encode E)
-  continue ui
-handleEvent serverConn ui (VtyEvent (V.EvKey V.KDown [])) = do
-  liftIO $ WS.sendTextData serverConn (encode N)
-  continue ui
-handleEvent serverConn ss _ = continue ss
+handleEvent _ ss _ = continue ss
 
 handleTick :: GameState -> EventM Name (Next GameState)
 handleTick ss = continue $ step ss
@@ -111,7 +101,7 @@ handleTick ss = continue $ step ss
 playGame :: WS.Connection -> IO GameState
 playGame serverConn = do
   chan <- newBChan 10
-  forkIO $ forever $ do
+  _    <- forkIO $ forever $ do
     Just game' <- decode <$> WS.receiveData serverConn
     writeBChan chan game'
   customMain (V.mkVty V.defaultConfig) (Just chan) (app serverConn) empty
