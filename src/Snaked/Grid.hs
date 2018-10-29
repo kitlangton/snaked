@@ -2,7 +2,6 @@
 module Snaked.Grid where
 
 import           Linear.V2
-import           Data.Bifunctor
 import           Control.Arrow
 import           Control.Lens
 import qualified Network.WebSockets            as WS

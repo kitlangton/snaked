@@ -6,7 +6,6 @@
 module Snaked.UI where
 
 import           Control.Concurrent             ( forkIO )
-import           Control.Lens            hiding ( Empty )
 import           Control.Monad.State
 import qualified Data.Map                      as M
 import           Data.Aeson

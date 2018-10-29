@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Snaked.Server where
@@ -11,6 +12,7 @@ import           Snaked.UI                      ( playGame )
 import           Snaked.GameState               ( GameState )
 import           Text.Printf
 import           Data.Aeson
+import           Data.Maybe                     ( fromMaybe )
 import qualified Snaked.GameState              as GameState
 import           Snaked.Snake
 import           Control.Monad.Reader
@@ -94,5 +96,5 @@ handleConnection env pending = do
 clientApp :: WS.ClientApp ()
 clientApp conn = void $ playGame conn
 
-client :: IO ()
-client = WS.runClient "127.0.0.1" 9160 "/" clientApp
+client :: String -> IO ()
+client serverUrl = WS.runClient serverUrl 9160 "/" clientApp

@@ -9,5 +9,3 @@ RUN stack install --only-dependencies
 COPY . /opt/snaked
 
 RUN stack install
-
-# CMD ["/usr/local/bin/stack", "exec", "example-exe"]

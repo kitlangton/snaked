@@ -9,9 +9,7 @@ import           Data.List                      ( nub )
 import           Data.Maybe
 import           Control.Lens.TH
 import           Control.Lens
-import           Control.Lens.Unsound
 import           Control.Applicative
-import           Data.Traversable
 import           Data.Aeson
 
 import           Snaked.Grid                    ( Direction(..)
