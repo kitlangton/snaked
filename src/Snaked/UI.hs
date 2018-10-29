@@ -8,7 +8,7 @@ module Snaked.UI where
 import           Control.Concurrent             ( forkIO )
 import           Control.Lens            hiding ( Empty )
 import           Control.Monad.State
-import qualified Data.Set                      as S
+import qualified Data.Map                      as M
 import           Data.Aeson
 import           Brick.BChan
 import           Brick                   hiding ( Direction )
@@ -19,9 +19,10 @@ import qualified Graphics.Vty                  as V
 import qualified Network.WebSockets            as WS
 import           Snaked.GameState
 import           Snaked.Grid
+import           Snaked.Snake
 
-body :: Widget ()
-body = withAttr "snake" $ str "██"
+body :: SnakeId -> Widget ()
+body sid = withAttr (snakeColor sid) $ str "██"
 
 open :: Widget ()
 open = str "  "
@@ -29,19 +30,20 @@ open = str "  "
 fruit :: Widget ()
 fruit = withAttr "fruit" $ str "██"
 
-data Piece = Body | Fruit | Empty
+data Piece = Body SnakeId | Fruit | Empty
 
 renderPiece :: Piece -> Widget ()
-renderPiece Body  = body
-renderPiece Empty = open
-renderPiece Fruit = fruit
+renderPiece (Body sid) = body sid
+renderPiece Empty      = open
+renderPiece Fruit      = fruit
 
 gameStateToGrid :: GameState -> [[Piece]]
 gameStateToGrid ss@GameState {..} =
-  let bodyParts = S.fromList $ ss ^.. allSnakesCoords
+  let bodyParts = allSnakesCoords ss
       (x', y')  = _size
   in  [ [ case () of
-            _ | S.member (mkCoord x y) bodyParts -> Body
+            _ | M.member (mkCoord x y) bodyParts ->
+              Body (bodyParts M.! mkCoord x y)
             _ | mkCoord x y == foodCoord ss -> Fruit
             _                               -> Empty
         | x <- [0 .. x' - 1]
@@ -59,9 +61,6 @@ renderGameState ss =
     .   fmap renderPiece
     <$> gameStateToGrid ss
 
--- main :: IO ()
--- main = simpleMain $ renderGameState defaultGameState
-
 type Name = ()
 
 app :: WS.Connection -> App GameState GameState ()
@@ -73,8 +72,25 @@ app serverConn = App
   , appAttrMap      = const theMap
   }
 
+
+blue, green, red, yellow :: AttrName
+blue = "blue"
+green = "green"
+red = "red"
+yellow = "yellow"
+
+snakeColor :: SnakeId -> AttrName
+snakeColor sid = [blue, green, yellow, red] !! fromIntegral sid
+
 theMap :: AttrMap
-theMap = attrMap V.defAttr [("fruit", fg V.red), ("snake", fg V.blue)]
+theMap = attrMap
+  V.defAttr
+  [ ("fruit", fg V.white)
+  , (blue   , fg V.blue)
+  , (green  , fg V.green)
+  , (red    , fg V.red)
+  , (yellow , fg V.yellow)
+  ]
 
 keyToDir :: V.Key -> Maybe Direction
 keyToDir V.KUp    = Just S

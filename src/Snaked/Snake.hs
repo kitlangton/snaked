@@ -9,6 +9,7 @@ import           Data.List                      ( nub )
 import           Data.Maybe
 import           Control.Lens.TH
 import           Control.Lens
+import           Control.Lens.Unsound
 import           Control.Applicative
 import           Data.Traversable
 import           Data.Aeson
@@ -24,7 +25,7 @@ import           Snaked.Grid                    ( Direction(..)
                                                 )
 
 newtype SnakeId = SnakeId Int
-  deriving (Show, Eq, Ord, Num, FromJSON, ToJSON, ToJSONKey, FromJSONKey)
+  deriving (Show, Eq, Ord, Num, Integral, Enum, Real, FromJSON, ToJSON, ToJSONKey, FromJSONKey)
 
 data Snake = Snake {
   _snakeId :: SnakeId,
@@ -35,7 +36,6 @@ data Snake = Snake {
 } deriving (Show, Eq)
 
 $(makeLenses ''Snake)
-
 fromList :: SnakeId -> [(Int, Int)] -> Snake
 fromList snakeId (fmap (uncurry mkCoord) -> coords)
   | length coords < 2 = error "Must call fromList with at least 2 coordinates"
@@ -76,16 +76,13 @@ intendTurn intendedTurn snake = if validTurn intendedTurn (snake ^. direction)
   then snake & nextDirection ?~ intendedTurn
   else snake
 
+data Axis = Horizontal | Vertical deriving (Show, Eq)
+
+axis (flip elem [N,S] -> True) = Vertical
+axis (flip elem [E,W] -> True) = Horizontal
+
 validTurn :: Direction -> Direction -> Bool
-validTurn next current =
-  current
-    `elem` [N, S]
-    &&     next
-    `elem` [E, W]
-    ||     current
-    `elem` [E, W]
-    &&     next
-    `elem` [N, S]
+validTurn next current = axis next /= axis current
 
 snakeTail :: Snake -> [Coord]
 snakeTail = views pieces tail

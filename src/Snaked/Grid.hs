@@ -6,7 +6,6 @@ import           Data.Bifunctor
 import           Control.Arrow
 import           Control.Lens
 import qualified Network.WebSockets            as WS
-import           Data.Text                      ( Text )
 
 import           Data.Aeson.TH
 import           System.Random

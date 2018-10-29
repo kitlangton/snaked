@@ -44,8 +44,12 @@ addSnake sid =
 removeSnake :: SnakeId -> GameState -> GameState
 removeSnake sid = snakes %~ M.delete sid
 
-allSnakesCoords :: Traversal' GameState Coord
-allSnakesCoords = snakes . traverse . Snake.pieces . traverse
+toCoordAndPieces :: Snake -> [(Coord, SnakeId)]
+toCoordAndPieces Snake {..} = zip _pieces (repeat _snakeId)
+
+allSnakesCoords :: GameState -> M.Map Coord SnakeId
+allSnakesCoords gs =
+  M.fromList $ join $ gs ^.. snakes . traverse . to toCoordAndPieces
 
 step :: GameState -> GameState
 step = advanceSnakes . checkFood . removeColliding
