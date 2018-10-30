@@ -33,6 +33,8 @@ dependencies:
 - mtl
 - vty
 - lifted-base
+- monad-control
+- transformers-base
 
 library:
   source-dirs: src

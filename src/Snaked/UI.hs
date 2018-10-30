@@ -30,28 +30,12 @@ open = str "  "
 fruit :: Widget ()
 fruit = withAttr "fruit" $ str "██"
 
-data Piece = Body SnakeId | Fruit | Empty
+renderPiece :: RenderCoord -> Widget ()
+renderPiece (RBody sid) = body sid
+renderPiece REmpty      = open
+renderPiece RFood       = fruit
 
-renderPiece :: Piece -> Widget ()
-renderPiece (Body sid) = body sid
-renderPiece Empty      = open
-renderPiece Fruit      = fruit
-
-gameStateToGrid :: GameState -> [[Piece]]
-gameStateToGrid gs@GameState {..} =
-  let bodyParts = allSnakesCoords gs
-      (x', y')  = _size
-  in  [ [ case () of
-            _ | M.member (mkCoord x y) bodyParts ->
-              Body (bodyParts M.! mkCoord x y)
-            _ | mkCoord x y == gs ^. foodCoord -> Fruit
-            _ -> Empty
-        | x <- [0 .. x' - 1]
-        ]
-      | y <- [0 .. y' - 1]
-      ]
-
-renderGameState :: GameState -> Widget ()
+renderGameState :: RenderState -> Widget ()
 renderGameState ss =
   center
     $   withBorderStyle unicodeRounded
@@ -59,11 +43,11 @@ renderGameState ss =
     $   vBox
     $   hBox
     .   fmap renderPiece
-    <$> gameStateToGrid ss
+    <$> ss
 
 type Name = ()
 
-app :: WS.Connection -> App GameState GameState ()
+app :: WS.Connection -> App RenderState RenderState ()
 app serverConn = App
   { appDraw         = (: []) . renderGameState
   , appChooseCursor = neverShowCursor
@@ -101,23 +85,20 @@ keyToDir _        = Nothing
 
 handleEvent
   :: WS.Connection
-  -> GameState
-  -> BrickEvent Name GameState
-  -> EventM Name (Next GameState)
-handleEvent _ _ (AppEvent newGameState) = handleTick newGameState
+  -> RenderState
+  -> BrickEvent Name RenderState
+  -> EventM Name (Next RenderState)
+handleEvent _ _ (AppEvent newGameState) = continue newGameState
 handleEvent _ ss (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ss
 handleEvent serverConn ui (VtyEvent (V.EvKey (keyToDir -> Just key) [])) = do
   liftIO $ WS.sendTextData serverConn (encode key)
   continue ui
 handleEvent _ ss _ = continue ss
 
-handleTick :: GameState -> EventM Name (Next GameState)
-handleTick ss = continue $ step ss
-
-playGame :: WS.Connection -> IO GameState
+playGame :: WS.Connection -> IO RenderState
 playGame serverConn = do
   chan <- newBChan 10
   _    <- forkIO $ forever $ do
     Just game' <- decode <$> WS.receiveData serverConn
     writeBChan chan game'
-  customMain (V.mkVty V.defaultConfig) (Just chan) (app serverConn) empty
+  customMain (V.mkVty V.defaultConfig) (Just chan) (app serverConn) []

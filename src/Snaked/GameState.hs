@@ -1,6 +1,8 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData      #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Snaked.GameState where
 
@@ -12,6 +14,7 @@ import           Control.Monad.State
 import qualified Data.Map.Strict               as M
 
 import           Data.Aeson.TH
+import           Data.Maybe
 import           Linear.V2
 import           Snaked.Snake
 import qualified Snaked.Snake                  as Snake
@@ -28,15 +31,40 @@ type SnakeT a = State GameState a
 
 $(makeLenses ''GameState)
 
-$(deriveJSON defaultOptions ''V2)
-
 $(deriveJSON defaultOptions ''Direction)
 
-$(deriveJSON defaultOptions ''Snake)
+data RenderCoord =
+  RBody SnakeId |
+  RFood |
+  REmpty
+  deriving (Show, Eq)
 
-$(deriveJSON defaultOptions ''GameState)
+$(deriveJSON defaultOptions ''RenderCoord)
 
-empty = GameState (M.fromList []) (20, 20) (take 30 $ randomCoords (20, 20))
+type RenderState = [[RenderCoord]]
+
+renderableState :: GameState -> RenderState
+renderableState gs =
+  [ [ fromMaybe REmpty $ M.lookup (V2 x y) renderMap | x <- [0 .. x' - 1] ]
+  | y <- [0 .. y' - 1]
+  ]
+ where
+  (x', y')  = gs ^. size
+  renderMap = stateRenderMap gs
+
+type RenderMap = M.Map Coord RenderCoord
+
+stateRenderMap :: GameState -> RenderMap
+stateRenderMap gs = snakeRenderMaps gs <> foodRenderMap gs
+ where
+  snakeRenderMaps :: GameState -> RenderMap
+  snakeRenderMaps GameState {..} = foldMap snakeRenderMap _snakes
+  snakeRenderMap Snake {..} = M.fromList $ (, RBody _snakeId) <$> _pieces
+  foodRenderMap gs = M.singleton (gs ^. foodCoord) RFood
+
+
+empty :: GameState
+empty = GameState (M.fromList []) (20, 20) (randomCoords (20, 20))
 
 foodCoord :: Getter GameState Coord
 foodCoord = foodLocations . to head
