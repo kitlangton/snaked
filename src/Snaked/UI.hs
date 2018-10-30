@@ -56,7 +56,6 @@ app serverConn = App
   , appAttrMap      = const theMap
   }
 
-
 blue, green, red, yellow :: AttrName
 blue = "blue"
 green = "green"

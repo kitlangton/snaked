@@ -17,7 +17,6 @@ import           Control.Concurrent             ( forkIO
                                                 )
 import           Control.Exception.Lifted
 import           Control.Lens
-import           Control.Lens.TH
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Control
@@ -25,7 +24,6 @@ import           Data.Aeson
 import           Data.IORef
 import           Control.Monad.Base
 import qualified Data.Map                      as M
-import           Data.Maybe                     ( fromMaybe )
 import           Data.Tuple
 import qualified Network.WebSockets            as WS
 import           Snaked.GameState               ( GameState )
@@ -50,7 +48,7 @@ data Env = Env
 $(makeLenses ''Env)
 
 newtype Server a = Server
-  { runServer :: ReaderT (IORef Env) IO a
+  { unServer :: ReaderT (IORef Env) IO a
   } deriving ( Functor
              , Applicative
              , Monad
@@ -59,6 +57,9 @@ newtype Server a = Server
              , MonadBase IO
              , MonadBaseControl IO
              )
+
+runServer :: Server a -> IORef Env -> IO a
+runServer (Server s) = runReaderT s
 
 -- Server API
   -- Must broadcast old gamestate for some order-of-operations reason I don't
@@ -69,7 +70,7 @@ gameloop = forever $ do
     users <- use envUsers
     game  <- envGame <%= GameState.step
     return (game, users)
-  liftIO $ forkIO $ mapM_ (sendGameState gameState) users
+  _ <- liftIO $ forkIO $ mapM_ (sendGameState gameState) users
   liftIO $ threadDelay 100000
 
 addUser :: WS.Connection -> Server ()
@@ -116,13 +117,13 @@ removeUser (User uid _) = do
 server :: IO ()
 server = do
   envVar <- newIORef (Env M.empty GameState.empty)
-  _      <- forkIO $ runReaderT (runServer gameloop) envVar
+  _      <- forkIO $ runServer gameloop envVar
   WS.runServer "127.0.0.1" 9160 $ handleConnection envVar
 
 handleConnection :: IORef Env -> WS.PendingConnection -> IO ()
 handleConnection env pending = do
   conn <- WS.acceptRequest pending
-  runReaderT (runServer (addUser conn)) env
+  runServer (addUser conn) env
 
 -- CLIENT
 clientApp :: WS.ClientApp ()
@@ -130,9 +131,3 @@ clientApp conn = void $ playGame conn
 
 client :: String -> IO ()
 client serverUrl = WS.runClient serverUrl 9160 "/" clientApp
-
--- BONUS
-finallyReaderT :: ReaderT r IO a -> ReaderT r IO b -> ReaderT r IO a
-finallyReaderT a sequel = do
-  r <- ask
-  liftIO $ runReaderT a r `finally` runReaderT sequel r

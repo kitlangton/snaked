@@ -1,18 +1,17 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData      #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData          #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Snaked.GameState where
 
 import           Snaked.Grid
-
 import           Control.Lens
 import           Control.Lens.TH
 import           Control.Monad.State
 import qualified Data.Map.Strict               as M
-
 import           Data.Aeson.TH
 import           Data.Maybe
 import           Linear.V2
@@ -33,10 +32,10 @@ $(makeLenses ''GameState)
 
 $(deriveJSON defaultOptions ''Direction)
 
-data RenderCoord =
-  RBody SnakeId |
-  RFood |
-  REmpty
+data RenderCoord
+  = RBody SnakeId
+  | RFood
+  | REmpty
   deriving (Show, Eq)
 
 $(deriveJSON defaultOptions ''RenderCoord)
@@ -62,7 +61,6 @@ stateRenderMap gs = snakeRenderMaps gs <> foodRenderMap gs
   snakeRenderMap Snake {..} = M.fromList $ (, RBody _snakeId) <$> _pieces
   foodRenderMap gs = M.singleton (gs ^. foodCoord) RFood
 
-
 empty :: GameState
 empty = GameState (M.fromList []) (20, 20) (randomCoords (20, 20))
 
@@ -76,12 +74,8 @@ addSnake sid =
 removeSnake :: SnakeId -> GameState -> GameState
 removeSnake sid = snakes %~ M.delete sid
 
-toCoordAndPieces :: Snake -> [(Coord, SnakeId)]
-toCoordAndPieces Snake {..} = zip _pieces (repeat _snakeId)
-
-allSnakesCoords :: GameState -> M.Map Coord SnakeId
-allSnakesCoords gs =
-  M.fromList $ join $ gs ^.. snakes . traverse . to toCoordAndPieces
+allSnakeCoords :: GameState -> [Coord]
+allSnakeCoords gs = gs ^.. snakes . traverse . pieces . traverse
 
 step :: GameState -> GameState
 step = advanceSnakes . checkFood . removeColliding
@@ -95,7 +89,7 @@ intendTurn snakeId newDirection gs =
 -- modified value
 checkFood :: GameState -> GameState
 checkFood gs | null eatingSnakes = gs
-             | otherwise         = gs' & foodLocations %~ tail
+             | otherwise         = setNextFood gs'
  where
   food = gs ^. foodCoord
   (eatingSnakes, gs') =
@@ -103,6 +97,14 @@ checkFood gs | null eatingSnakes = gs
       &   snakes
       .   partsOf (traverse . filtered (isEating food))
       <%~ fmap Snake.eat
+
+setNextFood :: GameState -> GameState
+setNextFood gs =
+  gs & foodLocations %~ dropWhile (`coordOverlapsSnakes` gs) . tail
+
+coordOverlapsSnakes :: Coord -> GameState -> Bool
+coordOverlapsSnakes coord (allSnakeCoords -> snakeCoords) =
+  coord `elem` snakeCoords
 
 -- Advances snakes in their current directions
 advanceSnakes :: GameState -> GameState
