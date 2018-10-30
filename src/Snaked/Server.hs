@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Snaked.Server where
@@ -25,6 +26,7 @@ import           Control.Monad.State
 import           Control.Lens
 import           Data.IORef
 import           Data.Tuple
+import qualified Data.Map.Strict as M
 
 data User = User {
   _id :: Int,
@@ -32,7 +34,7 @@ data User = User {
 }
 
 data Env = Env
-  { _envUsers :: [User]
+  { _envUsers :: M.Map Int User
   , _envGame :: GameState
   }
 
@@ -59,13 +61,13 @@ gameloop = forever $ do
 addUser :: WS.Connection -> Server ()
 addUser conn = do
   user <- atomically (addUser' conn)
-  finallyReaderT (userLoop user) (atomically $ removeUser user)
+  finallyReaderT (handleUserEvents user) (atomically $ removeUser user)
 
-userLoop :: User -> Server ()
-userLoop (User uid conn) = forever $ do
-  Just dir <- liftIO $ decode <$> WS.receiveData conn
-  liftIO $ putStrLn $ printf "User %d - %s" uid (show dir)
-  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) dir)
+handleUserEvents :: User -> Server ()
+handleUserEvents (User uid conn) = forever $ do
+  Just newDirection <- liftIO $ decode <$> WS.receiveData conn
+  liftIO $ putStrLn $ printf "User %d -> %s" uid (show newDirection)
+  atomically $ modify $ envGame %~ GameState.intendTurn (SnakeId uid) newDirection
 
 -- Server Helpers
 
@@ -82,22 +84,22 @@ sendGameState gameState (User _ conn) = WS.sendTextData conn (encode gameState)
 addUser' :: WS.Connection -> State Env User
 addUser' conn = do
   users <- use envUsers
-  let userId = length users
+  let userId = maybe 0 fst (M.lookupMax users)
       user   = User userId conn
   envGame %= GameState.addSnake (SnakeId userId)
-  envUsers %= (user :)
+  envUsers %= M.insert userId user
   return user
 
 removeUser :: User -> State Env ()
 removeUser (User uid _) = do
-  envUsers %= filter ((/= uid) . _id)
+  envUsers %= M.delete uid
   envGame %= GameState.removeSnake (SnakeId uid)
 
 -- SERVER
 
 server :: IO ()
 server = do
-  envVar <- newIORef (Env [] GameState.empty)
+  envVar <- newIORef (Env M.empty GameState.empty)
   _      <- forkIO $ runReaderT gameloop envVar
   WS.runServer "127.0.0.1" 9160 $ handleConnection envVar
 
