@@ -1,4 +1,7 @@
 dist:
+	# rm -rf ./bin
+	# mkdir ./bin
 	docker build . -t snaked
-	docker run --name snaked snaked:latest
-	docker cp snaked:/root/.local/bin ./bin
+	docker create --name snaked-build snaked:latest
+	docker cp snaked-build:/root/.local/bin .
+	docker rm snaked-build
