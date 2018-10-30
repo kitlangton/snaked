@@ -40,6 +40,45 @@ $(makeLenses ''Env)
 
 type Server = ReaderT (IORef Env) IO
 
+-- Server API
+
+gameloop :: Server ()
+gameloop = forever $ do
+  -- Must broadcast old gamestate for some order-of-operations reason I don't
+  -- fully understand at the moment.
+  (gameState, users) <- atomically $ do
+    oldGame <- use envGame
+    users   <- use envUsers
+    envGame %= GameState.step
+    return (oldGame, users)
+
+  liftIO $ do
+     mapM_ (sendGameState gameState) users
+     threadDelay 100000
+
+addUser :: WS.Connection -> Server ()
+addUser conn = do
+  user <- atomically (addUser' conn)
+  finallyReaderT (userLoop user) (atomically $ removeUser user)
+
+userLoop :: User -> Server ()
+userLoop (User uid conn) = forever $ do
+  Just dir <- liftIO $ decode <$> WS.receiveData conn
+  liftIO $ putStrLn $ printf "User %d - %s" uid (show dir)
+  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) dir)
+
+-- Server Helpers
+
+atomically :: State Env a -> Server a
+atomically f = do
+  envRef <- ask
+  liftIO $ atomicModifyIORef' envRef (swap . runState f)
+
+sendGameState :: GameState -> User -> IO ()
+sendGameState gameState (User _ conn) = WS.sendTextData conn (encode gameState)
+
+-- Env Functions
+
 addUser' :: WS.Connection -> State Env User
 addUser' conn = do
   users <- use envUsers
@@ -49,47 +88,12 @@ addUser' conn = do
   envUsers %= (user :)
   return user
 
-finallyReaderT :: ReaderT r IO a -> ReaderT r IO b -> ReaderT r IO a
-finallyReaderT a sequel = do
-  r <- ask
-  liftIO $ runReaderT a r `finally` runReaderT sequel r
-
-addUser :: WS.Connection -> Server ()
-addUser conn = do
-  user <- atomically (addUser' conn)
-  finallyReaderT (forever $ control user) (atomically $ removeUser' user)
-
-removeUser' :: User -> State Env ()
-removeUser' (User uid _) = do
+removeUser :: User -> State Env ()
+removeUser (User uid _) = do
   envUsers %= filter ((/= uid) . _id)
   envGame %= GameState.removeSnake (SnakeId uid)
 
-atomically :: State Env a -> Server a
-atomically f = do
-  envRef <- ask
-  liftIO $ atomicModifyIORef' envRef (swap . runState f)
-
-control :: User -> Server ()
-control (User uid conn) = do
-  Just dir <- liftIO $ decode <$> WS.receiveData conn
-  liftIO $ putStrLn $ printf "User %d - %s" uid (show dir)
-  atomically $ modify (envGame %~ GameState.intendTurn (SnakeId uid) dir)
-
-sendGameState :: GameState -> User -> IO ()
-sendGameState gameState (User _ conn) = WS.sendTextData conn (encode gameState)
-
-gameloop :: Server ()
-gameloop = do
-  (gameState, users) <- atomically $ do
-    oldGame <- use envGame
-    users   <- use envUsers
-    envGame %= GameState.step
-    return (oldGame, users)
-
-  liftIO $ mapM_ (sendGameState gameState) users
-
-  liftIO $ threadDelay 100000
-  gameloop
+-- SERVER
 
 server :: IO ()
 server = do
@@ -109,3 +113,10 @@ clientApp conn = void $ playGame conn
 
 client :: String -> IO ()
 client serverUrl = WS.runClient serverUrl 9160 "/" clientApp
+
+-- BONUS
+
+finallyReaderT :: ReaderT r IO a -> ReaderT r IO b -> ReaderT r IO a
+finallyReaderT a sequel = do
+  r <- ask
+  liftIO $ runReaderT a r `finally` runReaderT sequel r
