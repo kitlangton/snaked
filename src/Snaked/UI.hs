@@ -19,6 +19,7 @@ import qualified Network.WebSockets            as WS
 import           Snaked.GameState
 import           Snaked.Grid
 import           Snaked.Snake
+import           Control.Lens            hiding ( Empty )
 
 body :: SnakeId -> Widget ()
 body sid = withAttr (snakeColor sid) $ str "██"
@@ -37,14 +38,14 @@ renderPiece Empty      = open
 renderPiece Fruit      = fruit
 
 gameStateToGrid :: GameState -> [[Piece]]
-gameStateToGrid ss@GameState {..} =
-  let bodyParts = allSnakesCoords ss
+gameStateToGrid gs@GameState {..} =
+  let bodyParts = allSnakesCoords gs
       (x', y')  = _size
   in  [ [ case () of
             _ | M.member (mkCoord x y) bodyParts ->
               Body (bodyParts M.! mkCoord x y)
-            _ | mkCoord x y == foodCoord ss -> Fruit
-            _                               -> Empty
+            _ | mkCoord x y == gs ^. foodCoord -> Fruit
+            _ -> Empty
         | x <- [0 .. x' - 1]
         ]
       | y <- [0 .. y' - 1]

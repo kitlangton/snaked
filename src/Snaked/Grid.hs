@@ -1,13 +1,22 @@
 module Snaked.Grid where
 
-import           Linear.V2
 import           Control.Arrow
 import           Control.Lens
+import           Linear.V2
 import           System.Random
 
-data Direction = N | E | S | W deriving (Show, Enum, Eq, Ord)
+data Direction
+  = N
+  | E
+  | S
+  | W
+  deriving (Show, Enum, Eq, Ord)
 
-data Axis = Horizontal | Vertical deriving (Show, Eq)
+data Axis
+  = Horizontal
+  | Vertical
+  deriving (Show, Eq)
+
 axis N = Vertical
 axis S = Vertical
 axis E = Horizontal
@@ -17,21 +26,18 @@ orthogonal :: Direction -> Direction -> Bool
 orthogonal d1 d2 = axis d1 /= axis d2
 
 type Coord = V2 Int
+
 type Size = (Int, Int)
 
 instance Random a => Random (V2 a) where
   randomR (V2 l1 l2, V2 h1 h2) g =
-    let
-      (a,g') = randomR (l1,h1) g
-      (b,g'') = randomR (l2,h2) g'
-    in
-     (V2 a b, g'')
+    let (a, g') = randomR (l1, h1) g
+        (b, g'') = randomR (l2, h2) g'
+     in (V2 a b, g'')
   random g =
-    let
-      (a,g') = random g
-      (b,g'') = random g'
-    in
-     (V2 a b, g'')
+    let (a, g') = random g
+        (b, g'') = random g'
+     in (V2 a b, g'')
 
 randomCoords :: Size -> [Coord]
 randomCoords (a, b) = randomRs (V2 0 0, V2 a b) $ mkStdGen 1
@@ -70,9 +76,7 @@ isConnected cs = and $ zipWith connected cs (tail cs)
  where
   connected :: Coord -> Coord -> Bool
   connected c1 c2 = dist c1 c2 == 1
-
   dist :: Coord -> Coord -> Int
   dist c1 c2 = abs $ mdist c1 - mdist c2
-
   mdist :: Coord -> Int
   mdist = sum . fmap abs

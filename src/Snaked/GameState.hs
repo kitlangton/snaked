@@ -1,41 +1,45 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StrictData      #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE StrictData #-}
 
 module Snaked.GameState where
 
 import           Snaked.Grid
 
-import           Control.Lens.TH
 import           Control.Lens
+import           Control.Lens.TH
 import           Control.Monad.State
 import qualified Data.Map.Strict               as M
 
-import           Snaked.Snake
-import qualified Snaked.Snake                  as Snake
 import           Data.Aeson.TH
 import           Linear.V2
+import           Snaked.Snake
+import qualified Snaked.Snake                  as Snake
 
 type SnakeMap = M.Map SnakeId Snake
 
-data GameState = GameState {
-  _snakes :: SnakeMap,
-  _size :: Size,
-  _foodLocations :: [Coord]
-} deriving Show
+data GameState = GameState
+  { _snakes        :: SnakeMap
+  , _size          :: Size
+  , _foodLocations :: [Coord]
+  } deriving (Show)
 
 type SnakeT a = State GameState a
 
 $(makeLenses ''GameState)
+
 $(deriveJSON defaultOptions ''V2)
+
 $(deriveJSON defaultOptions ''Direction)
+
 $(deriveJSON defaultOptions ''Snake)
+
 $(deriveJSON defaultOptions ''GameState)
 
 empty = GameState (M.fromList []) (20, 20) (take 30 $ randomCoords (20, 20))
 
-foodCoord :: GameState -> Coord
-foodCoord = views foodLocations head
+foodCoord :: Getter GameState Coord
+foodCoord = foodLocations . to head
 
 addSnake :: SnakeId -> GameState -> GameState
 addSnake sid =
@@ -58,14 +62,14 @@ intendTurn :: SnakeId -> Direction -> GameState -> GameState
 intendTurn snakeId newDirection gs =
   gs & snakes . ix snakeId %~ Snake.intendTurn newDirection
 
+-- NEATO: (regarding where clause)
+-- With lenses you can return both the updated structure as well as the
+-- modified value
 checkFood :: GameState -> GameState
 checkFood gs | null eatingSnakes = gs
              | otherwise         = gs' & foodLocations %~ tail
  where
-  food = foodCoord gs
-  -- SO COOL
-  -- With lenses you can return both the updated structure as well as the
-  -- modified value
+  food = gs ^. foodCoord
   (eatingSnakes, gs') =
     gs
       &   snakes

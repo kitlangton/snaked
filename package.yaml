@@ -32,7 +32,7 @@ dependencies:
 - text
 - mtl
 - vty
-- stm
+- lifted-base
 
 library:
   source-dirs: src

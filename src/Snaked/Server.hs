@@ -1,39 +1,38 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 module Snaked.Server where
 
-import qualified Network.WebSockets            as WS
-import           Snaked.UI                      ( playGame )
-import           Snaked.GameState               ( GameState )
-import           Text.Printf
+import           Control.Concurrent             ( forkIO
+                                                , threadDelay
+                                                )
+import           Control.Exception.Lifted       ( finally )
+import           Control.Lens
+import           Control.Lens.TH
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Aeson
+import           Data.IORef
 import           Data.Maybe                     ( fromMaybe )
+import           Data.Tuple
+import qualified Network.WebSockets            as WS
+import           Snaked.GameState               ( GameState )
 import qualified Snaked.GameState              as GameState
 import           Snaked.Snake
-import           Control.Monad.Reader
-import           Control.Exception              ( finally )
-import           Control.Concurrent             ( threadDelay
-                                                , forkIO
-                                                )
-import           Control.Lens.TH
-import           Control.Monad.State
-import           Control.Lens
-import           Data.IORef
-import           Data.Tuple
+import           Snaked.UI                      ( playGame )
+import           Text.Printf
 
-data User = User {
-  _id :: Int,
-  _conn :: WS.Connection
-}
+data User = User
+  { _id   :: Int
+  , _conn :: WS.Connection
+  }
 
 data Env = Env
   { _envUsers :: [User]
-  , _envGame :: GameState
+  , _envGame  :: GameState
   }
 
 $(makeLenses ''Env)
@@ -49,15 +48,10 @@ addUser' conn = do
   envUsers %= (user :)
   return user
 
-finallyReaderT :: ReaderT r IO a -> ReaderT r IO b -> ReaderT r IO a
-finallyReaderT a sequel = do
-  r <- ask
-  liftIO $ runReaderT a r `finally` runReaderT sequel r
-
 addUser :: WS.Connection -> Server ()
 addUser conn = do
   user <- atomically (addUser' conn)
-  finallyReaderT (forever $ control user) (atomically $ removeUser' user)
+  finally (forever $ control user) (atomically $ removeUser' user)
 
 removeUser' :: User -> State Env ()
 removeUser' (User uid _) = do
@@ -85,9 +79,7 @@ gameloop = do
     users   <- use envUsers
     envGame %= GameState.step
     return (oldGame, users)
-
   liftIO $ mapM_ (sendGameState gameState) users
-
   liftIO $ threadDelay 100000
   gameloop
 
@@ -103,7 +95,6 @@ handleConnection env pending = do
   runReaderT (addUser conn) env
 
 -- CLIENT
-
 clientApp :: WS.ClientApp ()
 clientApp conn = void $ playGame conn
 
