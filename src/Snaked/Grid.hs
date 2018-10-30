@@ -1,15 +1,20 @@
-{-# LANGUAGE FlexibleContexts #-}
 module Snaked.Grid where
 
 import           Linear.V2
 import           Control.Arrow
 import           Control.Lens
-import qualified Network.WebSockets            as WS
-
-import           Data.Aeson.TH
 import           System.Random
 
 data Direction = N | E | S | W deriving (Show, Enum, Eq, Ord)
+
+data Axis = Horizontal | Vertical deriving (Show, Eq)
+axis N = Vertical
+axis S = Vertical
+axis E = Horizontal
+axis W = Horizontal
+
+orthogonal :: Direction -> Direction -> Bool
+orthogonal d1 d2 = axis d1 /= axis d2
 
 type Coord = V2 Int
 type Size = (Int, Int)
@@ -46,10 +51,11 @@ move = (+) . delta
 deriveDirection :: [Coord] -> Direction
 deriveDirection (a : b : _) = go a b
  where
-  go (V2 x1 y1) (V2 x2 y2) | x1 > x2 = E
-                           | x1 < x2 = W
-                           | y1 > y2 = N
-                           | y1 < y2 = S
+  go (V2 x1 y1) (V2 x2 y2) | x1 > x2   = E
+                           | x1 < x2   = W
+                           | y1 > y2   = N
+                           | y1 < y2   = S
+                           | otherwise = error "can't derive direction"
 
 wrapCoord :: Size -> Coord -> Coord
 wrapCoord (width, height) = _x %~ wrap width <<< _y %~ wrap height

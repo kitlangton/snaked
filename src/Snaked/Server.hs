@@ -16,6 +16,7 @@ import           Data.Maybe                     ( fromMaybe )
 import qualified Snaked.GameState              as GameState
 import           Snaked.Snake
 import           Control.Monad.Reader
+import           Control.Exception              ( finally )
 import           Control.Concurrent             ( threadDelay
                                                 , forkIO
                                                 )
@@ -26,8 +27,8 @@ import           Data.IORef
 import           Data.Tuple
 
 data User = User {
-  id :: Int,
-  conn :: WS.Connection
+  _id :: Int,
+  _conn :: WS.Connection
 }
 
 data Env = Env
@@ -48,10 +49,20 @@ addUser' conn = do
   envUsers %= (user :)
   return user
 
+finallyReaderT :: ReaderT r IO a -> ReaderT r IO b -> ReaderT r IO a
+finallyReaderT a sequel = do
+  r <- ask
+  liftIO $ runReaderT a r `finally` runReaderT sequel r
+
 addUser :: WS.Connection -> Server ()
 addUser conn = do
   user <- atomically (addUser' conn)
-  forever (control user)
+  finallyReaderT (forever $ control user) (atomically $ removeUser' user)
+
+removeUser' :: User -> State Env ()
+removeUser' (User uid _) = do
+  envUsers %= filter ((/= uid) . _id)
+  envGame %= GameState.removeSnake (SnakeId uid)
 
 atomically :: State Env a -> Server a
 atomically f = do

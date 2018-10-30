@@ -13,8 +13,9 @@ import           Control.Applicative
 import           Data.Aeson
 
 import           Snaked.Grid                    ( Direction(..)
-                                                , Coord(..)
+                                                , Coord
                                                 , Size
+                                                , orthogonal
                                                 , move
                                                 , mkCoord
                                                 , deriveDirection
@@ -34,6 +35,7 @@ data Snake = Snake {
 } deriving (Show, Eq)
 
 $(makeLenses ''Snake)
+
 fromList :: SnakeId -> [(Int, Int)] -> Snake
 fromList snakeId (fmap (uncurry mkCoord) -> coords)
   | length coords < 2 = error "Must call fromList with at least 2 coordinates"
@@ -42,6 +44,7 @@ fromList snakeId (fmap (uncurry mkCoord) -> coords)
   | length coords /= length (nub coords) = error "Each coord must be unique"
   | otherwise = Snake snakeId coords False Nothing $ deriveDirection coords
 
+eat :: Snake -> Snake
 eat = hasEaten .~ True
 
 advance :: Size -> Snake -> Snake
@@ -70,17 +73,9 @@ finalizeTurn s = fromMaybe s $ do
   return (s & direction .~ next)
 
 intendTurn :: Direction -> Snake -> Snake
-intendTurn intendedTurn snake = if validTurn intendedTurn (snake ^. direction)
+intendTurn intendedTurn snake = if orthogonal intendedTurn (snake ^. direction)
   then snake & nextDirection ?~ intendedTurn
   else snake
-
-data Axis = Horizontal | Vertical deriving (Show, Eq)
-
-axis (flip elem [N,S] -> True) = Vertical
-axis (flip elem [E,W] -> True) = Horizontal
-
-validTurn :: Direction -> Direction -> Bool
-validTurn next current = axis next /= axis current
 
 snakeTail :: Snake -> [Coord]
 snakeTail = views pieces tail
