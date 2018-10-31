@@ -61,6 +61,16 @@ stateRenderMap gs = snakeRenderMaps gs <> foodRenderMap gs
   snakeRenderMap Snake {..} = M.fromList $ (, RBody _snakeId) <$> _pieces
   foodRenderMap gs = M.singleton (gs ^. foodCoord) RFood
 
+-- stateRenderMap :: Getting RenderMap GameState RenderMap
+-- stateRenderMap = snakeRenderMaps <> foodRenderMap
+--  where
+--   foodRenderMap   = foodCoord . to (`M.singleton` RFood)
+--   snakeRenderMaps = snakes . traverse . to snakeRenderMap
+--   snakeRenderMap Snake {..} = M.fromList $ (, RBody _snakeId) <$> _pieces
+--   snakeRenderMapL = do
+--     sid <- snakeId
+--     pieces . to M.fromList $ (, RBody _snakeId) <$> _pieces
+
 empty :: GameState
 empty = GameState (M.fromList []) (20, 20) (randomCoords (20, 20))
 

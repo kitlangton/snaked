@@ -57,9 +57,8 @@ advance' size = do
   pieces %~ cons newHead . init
 
 grow :: Size -> Snake -> Snake
-grow size = do
-  newHead <- nextHead size
-  pieces %~ (newHead :)
+grow size snake =
+  let newHead = nextHead size snake in snake & pieces %~ (newHead :)
 
 nextHead :: Size -> Snake -> Coord
 nextHead size Snake {..} = wrapCoord size $ move _direction (head _pieces)
@@ -88,4 +87,4 @@ colliding s1 s2 | (s1 ^. snakeId) == (s2 ^. snakeId) = selfColliding s1
                 | otherwise = snakeHead s1 `elem` s2 ^. pieces
 
 selfColliding :: Snake -> Bool
-selfColliding = liftA2 elem snakeHead snakeTail
+selfColliding snake = snakeHead snake `elem` snakeTail snake
